@@ -12,23 +12,27 @@ def setup(agent):
         'MOVED_UP'       :  0, 
         'MOVED_DOWN'     :  0,
         'WAITED'         : -1,
-        'INTERRUPTED'    : -10,
-        'INVALID_ACTION' : -100,
+        'INTERRUPTED'    : -2,
+        'INVALID_ACTION' : -3,
 
-        'BOMB_DROPPED'   :  5,
+        'BOMB_DROPPED'   :  2,
         'BOMB_EXPLODED'  :  0,
 
         'CRATE_DESTROYED':  10,
-        'COIN_FOUND'     :  0,
+        'COIN_FOUND'     :  2,
         'COIN_COLLECTED' :  50,
 
         'KILLED_OPPONENT':  100,
-        'KILLED_SELF'    : -100,
+        'KILLED_SELF'    : -300,
 
-        'GOT_KILLED'     : -100,
-        'OPPONENT_ELIMINATED' : 0,
-        'SURVIVED_ROUND' : 100
+        'GOT_KILLED'     : -300,
+        'OPPONENT_ELIMINATED' : 100,
+        'SURVIVED_ROUND' : 1000
     }
+    agent.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'BOMB', 'WAIT']
+    agent.gamma = 0.99
+
+
     return
 
 def act(agent):
@@ -42,7 +46,7 @@ def reward_update(agent):
     for i in current_events:
         reward_gained += agent.reward_dict[e._fields[i]]
         
-    agent.reward = 0.9 * agent.reward + reward_gained
+    agent.reward = agent.gamma * agent.reward + reward_gained
 
     print('reward = {}'.format(agent.reward))
     return
