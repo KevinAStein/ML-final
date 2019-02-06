@@ -3,6 +3,12 @@ import numpy as np
 from time import sleep
 from settings import e
 
+#import pytorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torchvision
+import torchvision.transforms as transforms
 
 def setup(agent):
     agent.reward = 0
@@ -38,6 +44,8 @@ def setup(agent):
 def act(agent):
     agent.logger.info('Pick action according to pressed key')
     agent.next_action = agent.game_state['user_input']
+
+    map = create_np_map(agent.game_state)
     return
 
 def reward_update(agent):
@@ -50,6 +58,31 @@ def reward_update(agent):
 
     print('reward = {}'.format(agent.reward))
     return
+
+def create_np_map(state):
+    #get all information
+    step = state['step']
+    arena = state['arena']
+    pos = state['self']
+    others = state['others']
+    bombs = state['bombs']
+    explosions = state['explosions']
+    coins = state['coins']
+    
+    #place agent and other events in one array
+    arena[pos[0],pos[1]] = 100
+    arena = arena - 55*explosions
+    for i in range(len(others)):
+        arena[others[i][0],others[i][1]] = 10
+
+    for i in range(len(bombs)):
+        arena[bombs[i][0],bombs[i][1]] = (-10 * (3 - bombs[i][2]))
+
+    for i in range(len(coins)):
+        arena[coins[i][0],coins[i][1]] = 30
+
+    return arena
+    
 
 def end_of_episode(agent):
     last_event = np.array(agent.events)
