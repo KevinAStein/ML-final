@@ -1,11 +1,10 @@
-
 import numpy as np
 from time import sleep
 from settings import e
+import random
 from settings import settings
 from agent_code.geheimagent.model import SecretNetwork
 from agent_code.geheimagent.ReplayMemory import *
-import pdb
 
 #import pytorch
 import torch
@@ -47,7 +46,7 @@ def setup(agent):
     agent.rows = settings['rows']
     agent.cols = settings['cols']
     agent.INPUT_SHAPE = (1, 17, 17)
-    agent.gamma = 0.5
+    agent.gamma = 0.8
     agent.model = SecretNetwork(agent.INPUT_SHAPE)
     agent.criterion = nn.MSELoss()
     agent.optimizer = torch.optim.Adam(agent.model.parameters())
@@ -73,7 +72,10 @@ def act(agent):
     stateNN = np.expand_dims(state,axis = 0)
     assert(np.shape(stateNN) == agent.INPUT_SHAPE)
     stateNN = np.expand_dims(stateNN,axis = 0)
-    stateNN = torch.from_numpy(stateNN).float()
+    try:
+        stateNN = torch.from_numpy(stateNN).float()
+    except ValueError:
+        stateNN = torch.from_numpy(np.flip(stateNN,axis=0).copy()).float()
 
     # Gradienten löschen.
     agent.optimizer.zero_grad() 
@@ -84,7 +86,7 @@ def act(agent):
 
     # do mapping
     max_idx = int(agent.res.max(1)[1])
-    if (np.random.rand() < 0.2):
+    if (np.random.rand() < 0.5):
         max_idx = np.random.randint(6)
         #print('random action: ', max_idx)
 
@@ -109,7 +111,7 @@ def reward_update(agent):
 
     # Loss auswerten.
     #loss = agent.criterion(rew, agent.res)
-    print(agent.res)
+    #print(agent.res)
 
     # Loss zurück propagieren.
     #loss.backward()
@@ -154,7 +156,7 @@ def end_of_episode(agent):
         reward_gained += agent.reward_dict[e._fields[i]]
     agent.reward_received.append(reward_gained)
     
-    memory = ReplayMemory(1600)
+    memory = ReplayMemory(10000)
     n = len(agent.states)
     for i in range(n-1):
         state = agent.states[i]
@@ -164,44 +166,50 @@ def end_of_episode(agent):
         memory.push(state, action, next_state, reward)
 
         state, action = augment_data_transpose(agent.states[i],agent.actions_done[i])
-        next_state, whatever = augment_data_transpose(agent.states[i+1],0)
+        next_state, _ = augment_data_transpose(agent.states[i+1],0)
         reward = agent.reward_received[i]
         memory.push(state, action, next_state, reward)
 
         state, action = augment_data_flipud(agent.states[i],agent.actions_done[i])
-        next_state, whatever = augment_data_flipud(agent.states[i+1],0)
+        next_state, _ = augment_data_flipud(agent.states[i+1],0)
         reward = agent.reward_received[i]
         memory.push(state, action, next_state, reward)
 
         state, action = augment_data_fliplr(agent.states[i],agent.actions_done[i])
-        next_state, whatever = augment_data_fliplr(agent.states[i+1],0)
+        next_state, _ = augment_data_fliplr(agent.states[i+1],0)
         reward = agent.reward_received[i]
         memory.push(state, action, next_state, reward)
 
-    for i in range(n):
-        # get state from state function and convert it to NN format
-        state = agent.states[i]
-        stateNN = np.expand_dims(state,axis = 0)
-        assert(np.shape(stateNN) == agent.INPUT_SHAPE)
-        stateNN = np.expand_dims(stateNN,axis = 0)
-        stateNN = torch.from_numpy(stateNN).float()
+
+    n = int(len(memory) / 4)
+    transitions = memory.sample(n)
+    batch = Transition(*zip(*transitions))
+
+
+    for i in range(n-1):
 
         # Gradienten löschen.
         agent.optimizer.zero_grad() 
 
+        state = batch.state[i]
+        stateNN = np.expand_dims(state,axis = 0)
+        assert(np.shape(stateNN) == agent.INPUT_SHAPE)
+        stateNN = np.expand_dims(stateNN,axis = 0)
+        try:
+            stateNN = torch.from_numpy(stateNN).float()
+        except ValueError:
+            stateNN = torch.from_numpy(np.flip(stateNN,axis=0).copy()).float()
+
         # Pass state through network and get action out
         res = agent.model(stateNN)
 
-        max_idx = int(agent.res.max(1)[1])
-        
         rew = torch.zeros(1,6)
         for i in range(6):
             rew[0][i] = res[0][i]
-        rew[0][max_idx] = float(agent.reward_received[i])
+        rew[0][batch.action[i]] = float(batch.reward[i])
 
         # Loss auswerten.
         loss = agent.criterion(rew, res)
-        #print('loss',loss)
 
         # Loss zurück propagieren.
         loss.backward()
@@ -213,11 +221,10 @@ def end_of_episode(agent):
 
     #print('final_reward = {}'.format(agent.final_reward))
     torch.save(agent.model.state_dict(), 'geheimagent.pth') 
-    print('model saved')
-    agent.states = [] 
+    agent.states = []
     agent.actions_done = []
     agent.reward_received = []
-    print('cleaned states')
+    print('model saved')
     return
 
 def augment_data_transpose(state, action):
@@ -243,7 +250,7 @@ def augment_data_flipud(state, action):
     return res_state, res_action
 
 def augment_data_fliplr(state, action):
-    res_state = np.transpose(state)
+    res_state = np.fliplr(state)
     res_action = action
     if action == 2:
         res_action = 3
