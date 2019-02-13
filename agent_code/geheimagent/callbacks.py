@@ -20,15 +20,15 @@ def setup(agent):
     agent.current_reward = 0
     agent.max_idx = 0
     agent.reward_dict = {
-        'MOVED_LEFT'     :  -1,
-        'MOVED_RIGHT'    :  -1,
-        'MOVED_UP'       :  -1, 
-        'MOVED_DOWN'     :  -1,
-        'WAITED'         :  -200,
+        'MOVED_LEFT'     :  0,
+        'MOVED_RIGHT'    :  0,
+        'MOVED_UP'       :  0, 
+        'MOVED_DOWN'     :  0,
+        'WAITED'         :  -10,
         'INTERRUPTED'    : -200,
         'INVALID_ACTION' : -500,
 
-        'BOMB_DROPPED'   :  10,
+        'BOMB_DROPPED'   :  0,
         'BOMB_EXPLODED'  :  40,
 
         'CRATE_DESTROYED':  100,
@@ -36,11 +36,11 @@ def setup(agent):
         'COIN_COLLECTED' :  500,
 
         'KILLED_OPPONENT':  1000,
-        'KILLED_SELF'    : -5000,
+        'KILLED_SELF'    : -100,
 
         'GOT_KILLED'     : -500,
         'OPPONENT_ELIMINATED' : 10,
-        'SURVIVED_ROUND' : 0
+        'SURVIVED_ROUND' : 10
     }
     agent.actions = settings['actions']
     agent.rows = settings['rows']
@@ -54,6 +54,7 @@ def setup(agent):
     agent.states = []
     agent.actions_done = []
     agent.reward_received = []
+    print('model loaded')
     try:
         agent.model.load_state_dict(torch.load('geheimagent.pth'))
         agent.model.eval()
@@ -86,7 +87,7 @@ def act(agent):
 
     # do mapping
     max_idx = int(agent.res.max(1)[1])
-    if (np.random.rand() < 0.5):
+    if (np.random.rand() < 0.2):
         max_idx = np.random.randint(6)
         #print('random action: ', max_idx)
 
@@ -155,9 +156,18 @@ def end_of_episode(agent):
     for i in current_events:
         reward_gained += agent.reward_dict[e._fields[i]]
     agent.reward_received.append(reward_gained)
-    
-    memory = ReplayMemory(10000)
+   
     n = len(agent.states)
+    final_rew = 0
+    for i in range(n-1):
+        final_rew = final_rew + agent.reward_received[i] 
+    print('finale reward: ', final_rew)
+
+    #for i in range(n-1):
+    #    agent.reward_received[n-i-2]  = agent.reward_received[n-i-2]  + agent.gamma * agent.reward_received[n-i-1] 
+
+    memory = ReplayMemory(10000)
+
     for i in range(n-1):
         state = agent.states[i]
         next_state = agent.states[i+1]
@@ -165,23 +175,23 @@ def end_of_episode(agent):
         action = agent.actions_done[i]
         memory.push(state, action, next_state, reward)
 
-        state, action = augment_data_transpose(agent.states[i],agent.actions_done[i])
-        next_state, _ = augment_data_transpose(agent.states[i+1],0)
-        reward = agent.reward_received[i]
-        memory.push(state, action, next_state, reward)
+        #state, action = augment_data_transpose(agent.states[i],agent.actions_done[i])
+        #next_state, _ = augment_data_transpose(agent.states[i+1],0)
+        #reward = agent.reward_received[i]
+        #memory.push(state, action, next_state, reward)
 
-        state, action = augment_data_flipud(agent.states[i],agent.actions_done[i])
-        next_state, _ = augment_data_flipud(agent.states[i+1],0)
-        reward = agent.reward_received[i]
-        memory.push(state, action, next_state, reward)
+        #state, action = augment_data_flipud(agent.states[i],agent.actions_done[i])
+        #next_state, _ = augment_data_flipud(agent.states[i+1],0)
+        #reward = agent.reward_received[i]
+        #memory.push(state, action, next_state, reward)
 
-        state, action = augment_data_fliplr(agent.states[i],agent.actions_done[i])
-        next_state, _ = augment_data_fliplr(agent.states[i+1],0)
-        reward = agent.reward_received[i]
-        memory.push(state, action, next_state, reward)
+        #state, action = augment_data_fliplr(agent.states[i],agent.actions_done[i])
+        #next_state, _ = augment_data_fliplr(agent.states[i+1],0)
+        #reward = agent.reward_received[i]
+        #memory.push(state, action, next_state, reward)
 
 
-    n = int(len(memory) / 4)
+    n = int(len(memory) / 2)
     transitions = memory.sample(n)
     batch = Transition(*zip(*transitions))
 
@@ -229,33 +239,39 @@ def end_of_episode(agent):
 
 def augment_data_transpose(state, action):
     res_state = np.transpose(state)
-    res_action = action
+    res_action = 0
     if action == 0:
         res_action = 2
-    if action == 2:
+    elif action == 2:
         res_action = 0
-    if action == 1:
+    elif action == 1:
         res_action = 3
-    if action == 3:
+    elif action == 3:
         res_action = 1
+    else:
+        res_action = action
     return res_state, res_action
 
 def augment_data_flipud(state, action):
     res_state = np.flipud(state)
-    res_action = action
+    res_action = 0
     if action == 0:
         res_action = 1
-    if action == 0:
-        res_action = 1
+    elif action == 0:
+        res_action = 1    
+    else:
+        res_action = action
     return res_state, res_action
 
 def augment_data_fliplr(state, action):
     res_state = np.fliplr(state)
-    res_action = action
+    res_action = 0
     if action == 2:
         res_action = 3
     if action == 3:
         res_action = 2
+    else:
+        res_action = action
     return res_state, res_action
 
 def learn(agent):

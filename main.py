@@ -41,10 +41,10 @@ def main():
 
     # Initialize environment and agents
     world = BombeRLeWorld([
-            #('simple_agent', False),
-            ('geheimagent', True)#,
-            #('user_agent', False)
-            #('random_agent', False)
+            ('simple_agent', False),
+            ('deep_q_geheimagent', True),
+            ('simple_agent', False),
+            ('simple_agent', False)
         ])
     # world = ReplayWorld('Replay 2019-01-30 16:57:42')
     user_inputs = []
@@ -56,6 +56,7 @@ def main():
 
     # Run one or more games
     for i in range(s.n_rounds):
+        print(i)
         if not world.running:
             world.ready_for_restart_flag.wait()
             world.ready_for_restart_flag.clear()
