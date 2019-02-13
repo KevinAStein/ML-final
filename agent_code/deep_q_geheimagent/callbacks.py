@@ -33,7 +33,7 @@ def setup(agent):
         'INTERRUPTED'    : -200,
         'INVALID_ACTION' : -500,
 
-        'BOMB_DROPPED'   :  0,
+        'BOMB_DROPPED'   :  1,
         'BOMB_EXPLODED'  :  0,
 
         'CRATE_DESTROYED':  100,
@@ -43,24 +43,23 @@ def setup(agent):
         'KILLED_OPPONENT':  1000,
         'KILLED_SELF'    : -5000,
 
-        'GOT_KILLED'     : -500,
+        'GOT_KILLED'     : -5000,
         'OPPONENT_ELIMINATED' : 10,
-        'SURVIVED_ROUND' : 1000
+        'SURVIVED_ROUND' : 10000
         }
     # if gpu is to be used
     agent.device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent.actions = settings['actions']
     agent.INPUT_SHAPE = (1, 17, 17)
     agent.BATCH_SIZE = 16
-    agent.GAMMA = 0.5
-    agent.EPS_START = 0.9
+    agent.GAMMA = 0.8
+    agent.EPS_START = 0.4
     agent.EPS_END = 0.05
-    agent.EPS_DECAY = 200
+    agent.EPS_DECAY = 400
     agent.TARGET_UPDATE = 10
     agent.episodes = 0
     agent.policy_net = SecretNetwork(agent.INPUT_SHAPE)
     agent.target_net = SecretNetwork(agent.INPUT_SHAPE)
-    agent.criterion = nn.MSELoss()
     agent.optimizer = optim.RMSprop(agent.policy_net.parameters())
     agent.memory = ReplayMemory(10000)
     agent.optimizer.zero_grad()  
@@ -134,13 +133,14 @@ def create_map(agent):
     #place agent and other events in one array
     arena[pos[0],pos[1]] = 100
     arena = arena - 55*explosions
-    for i in range(len(others)):
-        arena[others[i][0],others[i][1]] = 10
 
     for i in range(len(bombs)):
         arena[bombs[i][0],bombs[i][1]] = (-50 * (3 - bombs[i][2]))
         if ((pos[0] == bombs[i][0]) and (pos[0] == bombs[i][0])):
             arena[pos[0],pos[1]] = -1000
+
+    for i in range(len(others)):
+        arena[others[i][0],others[i][1]] = 10
 
     for i in range(len(coins)):
         arena[coins[i][0],coins[i][1]] = 30
