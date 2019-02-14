@@ -25,26 +25,26 @@ def setup(agent):
     agent.current_reward = 0
     agent.max_idx = 0
     agent.reward_dict = {
-        'MOVED_LEFT'     :  0,
-        'MOVED_RIGHT'    :  0,
-        'MOVED_UP'       :  0, 
-        'MOVED_DOWN'     :  0,
-        'WAITED'         :  -10,
-        'INTERRUPTED'    : -200,
-        'INVALID_ACTION' : -500,
+        'MOVED_LEFT'     :  -1,
+        'MOVED_RIGHT'    :  -1,
+        'MOVED_UP'       :  -1, 
+        'MOVED_DOWN'     :  -1,
+        'WAITED'         :  -1,
+        'INTERRUPTED'    : -2,
+        'INVALID_ACTION' : -2,
 
-        'BOMB_DROPPED'   :  1,
+        'BOMB_DROPPED'   :  -1,
         'BOMB_EXPLODED'  :  0,
 
-        'CRATE_DESTROYED':  100,
-        'COIN_FOUND'     :  200,
-        'COIN_COLLECTED' :  500,
+        'CRATE_DESTROYED':  30,
+        'COIN_FOUND'     :  30,
+        'COIN_COLLECTED' :  100,
 
-        'KILLED_OPPONENT':  1000,
-        'KILLED_SELF'    : -5000,
+        'KILLED_OPPONENT':  100,
+        'KILLED_SELF'    : -300,
 
-        'GOT_KILLED'     : -500,
-        'OPPONENT_ELIMINATED' : 10,
+        'GOT_KILLED'     : -300,
+        'OPPONENT_ELIMINATED' : 0,
         'SURVIVED_ROUND' : 10
         }
     # if gpu is to be used
@@ -52,18 +52,21 @@ def setup(agent):
     agent.actions = settings['actions']
     agent.INPUT_SHAPE = (1, 17, 17)
     agent.BATCH_SIZE = 16
+    agent.LR = 0.0001
     agent.GAMMA = 0.8
-    agent.EPS_START = 0.9
+    agent.EPS_START = 0.5
     agent.EPS_END = 0.05
-    agent.EPS_DECAY = 1000
+    agent.EPS_DECAY = 10000
     agent.TARGET_UPDATE = 10
     agent.episodes = 0
     agent.policy_net = SecretNetwork(agent.INPUT_SHAPE)
     agent.target_net = SecretNetwork(agent.INPUT_SHAPE)
-    agent.optimizer = optim.RMSprop(agent.policy_net.parameters())
+    agent.optimizer = optim.Adam(agent.policy_net.parameters(),  lr=agent.LR)
+    agent.loss = nn.MSELoss()
     agent.memory = ReplayMemory(10000)
     agent.optimizer.zero_grad()  
     agent.episode_durations = []
+    agent.episode_reward = []
     agent.states = []
     agent.actions_done = []
     agent.reward_received = []
@@ -186,22 +189,33 @@ def end_of_episode(agent):
     for i in current_events:
         reward_gained += agent.reward_dict[e._fields[i]]
     reward = torch.tensor([reward_gained], device=agent.device, dtype=torch.float)
+    agent.reward_received.append(reward_gained)   
+
+    final_rew = 0
+    for i in range(len(agent.reward_received)):
+        final_rew = agent.reward_received[i] + final_rew
 
     agent.episode_durations.append(agent.game_state['step'])
+    agent.episode_reward.append(final_rew )
     plt.figure(2)
     plt.clf()
     durations_t = torch.tensor(agent.episode_durations, dtype=torch.float)
+    reward_t = torch.tensor(agent.episode_reward, dtype=torch.float)
     plt.title('Training...')
     plt.xlabel('Episode')
     plt.ylabel('Duration')
     plt.plot(durations_t.numpy())
+    plt.plot(reward_t.numpy())
     if len(durations_t) >= 100:
         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
+        plt.plot(means.numpy())        
+        means_rew = reward_t.unfold(0, 100, 1).mean(1).view(-1)
+        means_rew = torch.cat((torch.zeros(99), means_rew))
+        plt.plot(means_rew.numpy())   
     plt.pause(0.001)  # pause a bit so that plots are updated 
 
-    agent.reward_received.append(reward_gained)   
+
 
     n = len(agent.states)
 
@@ -258,7 +272,7 @@ def end_of_episode(agent):
     expected_state_action_values = (next_state_values * agent.GAMMA) + reward_batch
 
     # Compute Huber loss
-    loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+    loss = agent.loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Optimize the model
     agent.optimizer.zero_grad()
