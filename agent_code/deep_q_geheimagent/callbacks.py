@@ -29,7 +29,7 @@ def setup(agent):
         'MOVED_RIGHT'    :  0,
         'MOVED_UP'       :  0, 
         'MOVED_DOWN'     :  0,
-        'WAITED'         :  0,
+        'WAITED'         :  -10,
         'INTERRUPTED'    : -200,
         'INVALID_ACTION' : -500,
 
@@ -43,9 +43,9 @@ def setup(agent):
         'KILLED_OPPONENT':  1000,
         'KILLED_SELF'    : -5000,
 
-        'GOT_KILLED'     : -5000,
+        'GOT_KILLED'     : -500,
         'OPPONENT_ELIMINATED' : 10,
-        'SURVIVED_ROUND' : 10000
+        'SURVIVED_ROUND' : 10
         }
     # if gpu is to be used
     agent.device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,9 +53,9 @@ def setup(agent):
     agent.INPUT_SHAPE = (1, 17, 17)
     agent.BATCH_SIZE = 16
     agent.GAMMA = 0.8
-    agent.EPS_START = 0.4
+    agent.EPS_START = 0.9
     agent.EPS_END = 0.05
-    agent.EPS_DECAY = 400
+    agent.EPS_DECAY = 1000
     agent.TARGET_UPDATE = 10
     agent.episodes = 0
     agent.policy_net = SecretNetwork(agent.INPUT_SHAPE)
@@ -89,7 +89,6 @@ def act(agent):
 
     sample = random.random()
     eps_threshold = agent.EPS_END + (agent.EPS_START - agent.EPS_END) * math.exp(-1. * agent.steps_done / agent.EPS_DECAY)
-    agent.steps_done += 1
     # Pass state through network and get action out
     agent.res = agent.policy_net(state)
     # do mapping and random sample
@@ -103,6 +102,7 @@ def act(agent):
     action = torch.tensor([[max_idx]], device=agent.device, dtype=torch.long)
 
     agent.actions_done.append(action)
+    #print('action: ', agent.next_action)
 
     return
 
@@ -119,6 +119,26 @@ def reward_update(agent):
     return
 
 def create_map(agent):
+
+    # -1 wall
+    #  0 free
+    #  1 crate
+    #  2 opponents
+    #  3 opponents + bomb
+    #  4 coin
+    #  5 explosion
+    #  6 self
+    #  7 self + bomb (countdown = 3)
+    #  8 self + bomb (countdown = 2)
+    #  9 self + bomb (countdown = 1)
+    #  10 self + bomb (countdown = 0)
+    #  11 self + bomb (countdown = -1)
+    #  12 bomb (countdown = 2)
+    #  13 bomb (countdown = 1)
+    #  14 bomb (countdown = 0)
+    #  15 bomb (countdown = -1)
+
+
     game_state = agent.game_state
 
     #get all information
@@ -131,28 +151,31 @@ def create_map(agent):
     coins = game_state['coins']
     
     #place agent and other events in one array
-    arena[pos[0],pos[1]] = 100
-    arena = arena - 55*explosions
+    arena[pos[0],pos[1]] = 6
+    #add explosions
+    arena = arena + 5*explosions
 
+    #add bombs
     for i in range(len(bombs)):
-        arena[bombs[i][0],bombs[i][1]] = (-50 * (3 - bombs[i][2]))
-        if ((pos[0] == bombs[i][0]) and (pos[0] == bombs[i][0])):
-            arena[pos[0],pos[1]] = -1000
-
+        arena[bombs[i][0],bombs[i][1]] = 14 - bombs[i][2]
+        #make sure we know if we sit on a bomb
+        if ((pos[0] == bombs[i][0]) and (pos[1] == bombs[i][1])):
+            arena[pos[0],pos[1]] = 10 - bombs[i][2]
+    #add others
     for i in range(len(others)):
-        arena[others[i][0],others[i][1]] = 10
-
+        arena[others[i][0],others[i][1]] = 2
+        #add others sitting on a bomb
+        for j in range(len(bombs)):
+            if ((others[i][0] == bombs[i][0]) and (others[i][1] == bombs[i][1])):
+                arena[others[i][0],others[i][1]] = 3
+    
+    #add coins
     for i in range(len(coins)):
-        arena[coins[i][0],coins[i][1]] = 30
+        arena[coins[i][0],coins[i][1]] = 4
 
     stateNN = np.expand_dims(arena,axis = 0)
     assert(np.shape(stateNN) == agent.INPUT_SHAPE)
     stateNN = np.expand_dims(stateNN,axis = 0)
-    #try:
-    #    stateNN = torch.from_numpy(stateNN).float()
-    #except ValueError:
-    #    stateNN = torch.from_numpy(np.flip(stateNN,axis=0).copy()).float()
-
     return torch.from_numpy(stateNN).float()
     
 
@@ -172,6 +195,10 @@ def end_of_episode(agent):
     plt.xlabel('Episode')
     plt.ylabel('Duration')
     plt.plot(durations_t.numpy())
+    if len(durations_t) >= 100:
+        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
     plt.pause(0.001)  # pause a bit so that plots are updated 
 
     agent.reward_received.append(reward_gained)   
@@ -239,7 +266,7 @@ def end_of_episode(agent):
     for param in agent.policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     agent.optimizer.step()
-
+    agent.steps_done += 1
     print('final learn')
 
     # Update the target network, copying all weights and biases in DQN
