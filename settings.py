@@ -9,7 +9,7 @@ settings = {
     # Display
     'width': 1000,
     'height': 600,
-    'gui': False,
+    'gui': True,
     'fps': 15,
 
     # Main loop
@@ -23,8 +23,9 @@ settings = {
     'cols': 17,
     'rows': 17,
     'grid_size': 30,
+    'crate_density': 0.0,
     'actions': ['UP', 'DOWN', 'LEFT', 'RIGHT', 'BOMB', 'WAIT'],
-    'max_agents': 4,
+    'max_agents': 2,
     'max_steps': 400,
     'stop_if_not_training': True,
     'bomb_power': 3,

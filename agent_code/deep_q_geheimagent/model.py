@@ -11,14 +11,12 @@ class SecretNetwork(nn.Module):
 
         # Hier passiert die Magie. Wir definieren uns die Layer.
         self.conv = nn.Sequential(
-            nn.Conv2d(1, 8, 3, 2), # Das kann jetzt halt alles mögliche sein. Sind hier mal 2 Convolutional Layer.
+            nn.Conv2d(1, 8, 5, 2), # Das kann jetzt halt alles mögliche sein. Sind hier mal 2 Convolutional Layer.
                                    # Die Parameter sind: in_channels, out_channels, kernel_size, stride
                                    # Da dein Input das Spielfeld ist, ist in_channels=1, für rgb images zb in_channels=3.
                                    # Siehe https://pytorch.org/docs/stable/nn.html
             nn.ReLU(),
-            nn.Conv2d(8, 16, 3, 2),
-            nn.ReLU(),
-            nn.Conv2d(16, 16, 3, 2),
+            nn.Conv2d(8, 32, 5, 2),
             nn.ReLU(),
         )
 

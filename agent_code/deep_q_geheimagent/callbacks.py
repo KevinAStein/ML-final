@@ -29,40 +29,39 @@ def setup(agent):
         'MOVED_RIGHT'    :  -1,
         'MOVED_UP'       :  -1, 
         'MOVED_DOWN'     :  -1,
-        'WAITED'         :  -1,
-        'INTERRUPTED'    : -2,
-        'INVALID_ACTION' : -2,
+        'WAITED'         :  -10,
+        'INTERRUPTED'    : -100,
+        'INVALID_ACTION' : -200,
 
-        'BOMB_DROPPED'   :  -1,
+        'BOMB_DROPPED'   :  -2,
         'BOMB_EXPLODED'  :  0,
 
-        'CRATE_DESTROYED':  30,
-        'COIN_FOUND'     :  30,
-        'COIN_COLLECTED' :  100,
+        'CRATE_DESTROYED':  10,
+        'COIN_FOUND'     :  200,
+        'COIN_COLLECTED' :  1000,
 
         'KILLED_OPPONENT':  100,
-        'KILLED_SELF'    : -300,
+        'KILLED_SELF'    :  -100,
 
-        'GOT_KILLED'     : -300,
+        'GOT_KILLED'     : -100,
         'OPPONENT_ELIMINATED' : 0,
-        'SURVIVED_ROUND' : 10
+        'SURVIVED_ROUND' : 1000
         }
     # if gpu is to be used
     agent.device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent.actions = settings['actions']
     agent.INPUT_SHAPE = (1, 17, 17)
-    agent.BATCH_SIZE = 16
+    agent.BATCH_SIZE = 128
     agent.LR = 0.0001
     agent.GAMMA = 0.8
-    agent.EPS_START = 0.5
+    agent.EPS_START = 0.05
     agent.EPS_END = 0.05
-    agent.EPS_DECAY = 10000
+    agent.EPS_DECAY = 1000
     agent.TARGET_UPDATE = 10
     agent.episodes = 0
     agent.policy_net = SecretNetwork(agent.INPUT_SHAPE)
     agent.target_net = SecretNetwork(agent.INPUT_SHAPE)
     agent.optimizer = optim.Adam(agent.policy_net.parameters(),  lr=agent.LR)
-    agent.loss = nn.MSELoss()
     agent.memory = ReplayMemory(10000)
     agent.optimizer.zero_grad()  
     agent.episode_durations = []
@@ -89,23 +88,17 @@ def act(agent):
     state = create_map(agent)
     agent.states.append(state)
 
-
     sample = random.random()
     eps_threshold = agent.EPS_END + (agent.EPS_START - agent.EPS_END) * math.exp(-1. * agent.steps_done / agent.EPS_DECAY)
     # Pass state through network and get action out
-    agent.res = agent.policy_net(state)
-    # do mapping and random sample
-    max_idx = int(agent.res.max(1)[1])
+    action = agent.policy_net(state).max(1)[1].view(1, 1)
+
     if sample < eps_threshold:
-        max_idx = np.random.randint(6)
-
-    agent.next_action = agent.actions[max_idx]
-    agent.idx_action = max_idx
-
-    action = torch.tensor([[max_idx]], device=agent.device, dtype=torch.long)
-
+        action = torch.tensor([[random.randrange(6)]], device=agent.device, dtype=torch.long)
+    
     agent.actions_done.append(action)
-    #print('action: ', agent.next_action)
+
+    agent.next_action = agent.actions[int(action)]
 
     return
 
@@ -118,85 +111,22 @@ def reward_update(agent):
     reward = torch.tensor([reward_gained], device=agent.device, dtype=torch.float)
     
     agent.reward_received.append(reward)
+    #print('return rew:' , reward)
 
     return
-
-def create_map(agent):
-
-    # -1 wall
-    #  0 free
-    #  1 crate
-    #  2 opponents
-    #  3 opponents + bomb
-    #  4 coin
-    #  5 explosion
-    #  6 self
-    #  7 self + bomb (countdown = 3)
-    #  8 self + bomb (countdown = 2)
-    #  9 self + bomb (countdown = 1)
-    #  10 self + bomb (countdown = 0)
-    #  11 self + bomb (countdown = -1)
-    #  12 bomb (countdown = 2)
-    #  13 bomb (countdown = 1)
-    #  14 bomb (countdown = 0)
-    #  15 bomb (countdown = -1)
-
-
-    game_state = agent.game_state
-
-    #get all information
-    step = game_state['step']
-    arena = game_state['arena']
-    pos = game_state['self']
-    others = game_state['others']
-    bombs = game_state['bombs']
-    explosions = game_state['explosions']
-    coins = game_state['coins']
-    
-    #place agent and other events in one array
-    arena[pos[0],pos[1]] = 6
-    #add explosions
-    arena = arena + 5*explosions
-
-    #add bombs
-    for i in range(len(bombs)):
-        arena[bombs[i][0],bombs[i][1]] = 14 - bombs[i][2]
-        #make sure we know if we sit on a bomb
-        if ((pos[0] == bombs[i][0]) and (pos[1] == bombs[i][1])):
-            arena[pos[0],pos[1]] = 10 - bombs[i][2]
-    #add others
-    for i in range(len(others)):
-        arena[others[i][0],others[i][1]] = 2
-        #add others sitting on a bomb
-        for j in range(len(bombs)):
-            if ((others[i][0] == bombs[i][0]) and (others[i][1] == bombs[i][1])):
-                arena[others[i][0],others[i][1]] = 3
-    
-    #add coins
-    for i in range(len(coins)):
-        arena[coins[i][0],coins[i][1]] = 4
-
-    stateNN = np.expand_dims(arena,axis = 0)
-    assert(np.shape(stateNN) == agent.INPUT_SHAPE)
-    stateNN = np.expand_dims(stateNN,axis = 0)
-    return torch.from_numpy(stateNN).float()
     
 
 def end_of_episode(agent):
     agent.episodes += 1
-    current_events = np.array(agent.events)
-    reward_gained = 0
-    for i in current_events:
-        reward_gained += agent.reward_dict[e._fields[i]]
-    reward = torch.tensor([reward_gained], device=agent.device, dtype=torch.float)
-    agent.reward_received.append(reward_gained)   
+    reward_update(agent) 
 
     final_rew = 0
     for i in range(len(agent.reward_received)):
         final_rew = agent.reward_received[i] + final_rew
-
     agent.episode_durations.append(agent.game_state['step'])
     agent.episode_reward.append(final_rew )
+
+
     plt.figure(2)
     plt.clf()
     durations_t = torch.tensor(agent.episode_durations, dtype=torch.float)
@@ -240,61 +170,127 @@ def end_of_episode(agent):
         #next_state, _ = augment_data_fliplr(agent.states[i+1],0)
         #reward = agent.reward_received[i]
         #memory.push(state, action, next_state, reward)
+    state = agent.states[n-1]
+    next_state = None
+    reward = agent.reward_received[n-1]
+    action = agent.actions_done[n-1]
+    agent.memory.push(state, action, next_state, reward)
+ 
 
+    sample_size = int(len(agent.memory))
+    if sample_size > agent.BATCH_SIZE:
 
-    sample_size = int(len(agent.memory) / 2)
-    transitions = agent.memory.sample(sample_size)
-    batch = Transition(*zip(*transitions))
+        transitions = agent.memory.sample(agent.BATCH_SIZE)
+        batch = Transition(*zip(*transitions))
 
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.action)
+        reward_batch = torch.cat(batch.reward)
 
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
-    state_action_values = agent.policy_net(state_batch).gather(1, action_batch)
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # columns of actions taken. These are the actions which would've been taken
+        # for each batch state according to policy_net
+        state_action_values = agent.policy_net(state_batch).gather(1, action_batch)
 
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=agent.device, dtype=torch.uint8)
-    non_final_next_states = torch.cat([s for s in batch.next_state
-                                                if s is not None])
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1)[0].
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(sample_size, device=agent.device)
-    next_state_values[non_final_mask] = agent.target_net(non_final_next_states).max(1)[0].detach()
-    # Compute the expected Q values
-    expected_state_action_values = (next_state_values * agent.GAMMA) + reward_batch
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                              batch.next_state)), device=agent.device, dtype=torch.uint8)
+        non_final_next_states = torch.cat([s for s in batch.next_state
+                                                    if s is not None])
+        # Compute V(s_{t+1}) for all next states.
+        # Expected values of actions for non_final_next_states are computed based
+        # on the "older" target_net; selecting their best reward with max(1)[0].
+        # This is merged based on the mask, such that we'll have either the expected
+        # state value or 0 in case the state was final.
+        next_state_values = torch.zeros(agent.BATCH_SIZE, device=agent.device)
+        next_state_values[non_final_mask] = agent.target_net(non_final_next_states).max(1)[0].detach()
+        # Compute the expected Q values
+        agent.optimizer.zero_grad()
+        expected_state_action_values = (next_state_values * agent.GAMMA) + reward_batch
 
-    # Compute Huber loss
-    loss = agent.loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        # Compute Huber loss
+        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
-    # Optimize the model
-    agent.optimizer.zero_grad()
-    loss.backward()
-    for param in agent.policy_net.parameters():
-        param.grad.data.clamp_(-1, 1)
-    agent.optimizer.step()
-    agent.steps_done += 1
-    print('final learn')
+        # Optimize the model
 
-    # Update the target network, copying all weights and biases in DQN
-    if agent.episodes % agent.TARGET_UPDATE == 0:
-        agent.target_net.load_state_dict(agent.policy_net.state_dict())
-        print('update target_net')
+        loss.backward()
+        for param in agent.policy_net.parameters():
+            param.grad.data.clamp_(-1, 1)
+        agent.optimizer.step()
+        agent.steps_done += 1
+
+        # Update the target network, copying all weights and biases in DQN
+        if agent.episodes % agent.TARGET_UPDATE == 0:
+            agent.target_net.load_state_dict(agent.policy_net.state_dict())
+            agent.target_net.eval()
+            torch.save(agent.target_net.state_dict(), 'agent_code/deep_q_geheimagent/deep_geheimagent.pth') 
+            print('update target_net')
 
     #print('final_reward = {}'.format(agent.final_reward))
-    torch.save(agent.target_net.state_dict(), 'agent_code/deep_q_geheimagent/deep_geheimagent.pth') 
     agent.states = []
     agent.actions_done = []
     agent.reward_received = []
     print('model saved')
     return
+
+
+def create_map(agent):
+
+    # -1 wall
+    #  0 free
+    #  1 crate
+    #  2 self
+    #  3 opponents
+    #  4 opponents + bomb
+    #  5 coin
+    #  9 explosion
+    #  10 self + bomb
+    #  12 bomb (countdown = 2)
+    #  13 bomb (countdown = 1)
+    #  14 bomb (countdown = 0)
+    #  15 bomb (countdown = -1)
+
+    game_state = agent.game_state
+
+    #get all information
+    step = game_state['step']
+    arena = game_state['arena']
+    pos = game_state['self']
+    others = game_state['others']
+    bombs = game_state['bombs']
+    explosions = game_state['explosions']
+    coins = game_state['coins']
+    
+    #place agent and other events in one array
+    arena[pos[0],pos[1]] = 2
+    #add explosions
+    arena = arena + 9*explosions
+
+    #add bombs
+    for i in range(len(bombs)):
+        arena[bombs[i][0],bombs[i][1]] = 14 - bombs[i][2]
+        #make sure we know if we sit on a bomb
+        if ((pos[0] == bombs[i][0]) and (pos[1] == bombs[i][1])):
+            arena[pos[0],pos[1]] = 10
+    
+
+    #add others
+    for i in range(len(others)):
+        arena[others[i][0],others[i][1]] = 3
+        #add others sitting on a bomb
+        for j in range(len(bombs)):
+            if ((others[i][0] == bombs[j][0]) and (others[i][1] == bombs[j][1])):
+                arena[others[i][0],others[i][1]] = 4
+    
+    #add coins
+    for i in range(len(coins)):
+        arena[coins[i][0],coins[i][1]] = 5
+
+    stateNN = np.expand_dims(arena,axis = 0)
+    assert(np.shape(stateNN) == agent.INPUT_SHAPE)
+    stateNN = np.expand_dims(stateNN,axis = 0)
+    return torch.from_numpy(stateNN).float()
 
 def augment_data_transpose(state, action):
     res_state = np.transpose(state)

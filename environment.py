@@ -97,7 +97,7 @@ class BombeRLeWorld(object):
         self.round_id = f'Replay {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
 
         # Arena with wall and crate layout
-        self.arena = (np.random.rand(s.cols, s.rows) > 0.25).astype(int)
+        self.arena = (np.random.rand(s.cols, s.rows) < s.crate_density).astype(int)
         self.arena[:1, :] = -1
         self.arena[-1:,:] = -1
         self.arena[:, :1] = -1
@@ -119,12 +119,15 @@ class BombeRLeWorld(object):
         self.coins = []
         for i in range(3):
             for j in range(3):
+                n_crates = (self.arena[1+5*i:6+5*i, 1+5*j:6+5*j] == 1).sum()
                 while True:
                     x, y = np.random.randint(1+5*i,6+5*i), np.random.randint(1+5*j,6+5*j)
-                    if self.arena[x,y] == 1:
+                    if n_crates == 0 and self.arena[x,y] == 0:
                         self.coins.append(Coin((x,y)))
-                        # self.coins[-1].collectable=True
-                        # self.arena[x,y] = 0
+                        self.coins[-1].collectable = True
+                        break
+                    elif self.arena[x,y] == 1:
+                        self.coins.append(Coin((x,y)))
                         break
 
         # Reset agents and distribute starting positions
@@ -302,7 +305,7 @@ class BombeRLeWorld(object):
         # Bombs
         for bomb in self.bombs:
             # Explode when timer is finished
-            if bomb.timer < 0:
+            if bomb.timer <= 0:
                 self.logger.info(f'Agent <{bomb.owner.name}>\'s bomb at {(bomb.x, bomb.y)} explodes')
                 bomb.owner.events.append(e.BOMB_EXPLODED)
                 blast_coords = bomb.get_blast_coords(self.arena)
@@ -331,7 +334,7 @@ class BombeRLeWorld(object):
         agents_hit = set()
         for explosion in self.explosions:
             # Kill agents
-            if explosion.timer > 0:
+            if explosion.timer > 1:
                 for a in self.active_agents:
                     if (not a.dead) and (a.x, a.y) in explosion.blast_coords:
                         agents_hit.add(a)
@@ -347,7 +350,7 @@ class BombeRLeWorld(object):
                             explosion.owner.events.append(e.KILLED_OPPONENT)
                             explosion.owner.trophies.append(smoothscale(a.avatar, (15,15)))
             # Show smoke for a little longer
-            if explosion.timer < 0:
+            if explosion.timer <= 0:
                 explosion.active = False
             # Progress countdown
             explosion.timer -= 1
@@ -389,7 +392,6 @@ class BombeRLeWorld(object):
 
     def end_round(self):
         if self.running:
-            self.running = False
             # Wait in case there is still a game step running
             sleep(s.update_interval)
 
@@ -418,6 +420,8 @@ class BombeRLeWorld(object):
                 self.replay['n_steps'] = self.step
                 with open(f'replays/{self.round_id}.pt', 'wb') as f:
                     pickle.dump(self.replay, f)
+            # Mark round as ended
+            self.running = False
         else:
             self.logger.warn('End-of-round requested while no round was running')
 
@@ -426,6 +430,8 @@ class BombeRLeWorld(object):
 
 
     def end(self):
+        if self.running:
+            self.end_round()
         self.logger.info('SHUT DOWN')
         for a in self.agents:
             # Send exit message to shut down agent
