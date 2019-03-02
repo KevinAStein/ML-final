@@ -42,9 +42,9 @@ def main():
     # Initialize environment and agents
     world = BombeRLeWorld([
             ('AC_geheimagent', True),
+            ('user_agent', False),
             ('simple_agent', False),
-            ('deep_q_geheimagent3', True),
-            ('deep_q_geheimagent4', True)
+            ('simple_agent', False)
         ])
     # world = ReplayWorld('Replay 2019-01-30 16:57:42')
     user_inputs = []

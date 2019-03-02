@@ -49,7 +49,7 @@ class BombeRLeWorld(object):
         # Initialize screen
         self.screen = pygame.display.set_mode((s.width, s.height))
         pygame.display.set_caption('BombeRLe')
-        icon = pygame.image.load(f'assets/bomb_yellow.png')
+        icon = pygame.image.load('assets/bomb_yellow.png')
         pygame.display.set_icon(icon)
 
         # Background and tiles

@@ -61,6 +61,7 @@ class AgentProcess(mp.Process):
             self.code.setup(self.fake_self)
         except Exception as e:
             self.wlogger.exception(f'Error in callback function: {e}')
+            raise e
         self.wlogger.debug('Set flag to indicate readiness')
         self.ready_flag.set()
 
@@ -95,6 +96,7 @@ class AgentProcess(mp.Process):
                         self.code.reward_update(self.fake_self)
                     except Exception as e:
                         self.wlogger.exception(f'Error in callback function: {e}')
+                        raise e
                     self.wlogger.debug('Set flag to indicate readiness')
                     self.ready_flag.set()
 
@@ -108,6 +110,8 @@ class AgentProcess(mp.Process):
                     self.wlogger.warn(f'Got interrupted by timeout')
                 except Exception as e:
                     self.wlogger.exception(f'Error in callback function: {e}')
+                    print(f'Error in callback function: {e}')
+                    raise e
 
                 # Send action and time taken back to main process
                 with IgnoreKeyboardInterrupt():

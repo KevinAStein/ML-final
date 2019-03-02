@@ -34,7 +34,7 @@ def setup(agent):
         'INTERRUPTED'    : -100,
         'INVALID_ACTION' : -200,
 
-        'BOMB_DROPPED'   :  -2,
+        'BOMB_DROPPED'   :  -1,
         'BOMB_EXPLODED'  :  10,
 
         'CRATE_DESTROYED':  10,
@@ -42,10 +42,10 @@ def setup(agent):
         'COIN_COLLECTED' :  1000,
 
         'KILLED_OPPONENT':  100,
-        'KILLED_SELF'    :  -100,
+        'KILLED_SELF'    :  -500,
 
-        'GOT_KILLED'     : -100,
-        'OPPONENT_ELIMINATED' : 0,
+        'GOT_KILLED'     : -500,
+        'OPPONENT_ELIMINATED' : 2000,
         'SURVIVED_ROUND' : 1000
         }
     # if gpu is to be used
@@ -53,7 +53,7 @@ def setup(agent):
     agent.actions = settings['actions']
     agent.N_actions = len(agent.actions)
 
-    agent.INPUT_SHAPE = (1, 17, 17)
+    agent.INPUT_SHAPE = (13, 17, 17)
     agent.BATCH_SIZE = 128
     agent.LR = 0.0001
     agent.GAMMA = 0.9
@@ -96,6 +96,7 @@ def act(agent):
     agent.logprobs.append(action_distribution.log_prob(action))
     agent.state_values.append(state_value)
     agent.next_action = agent.actions[action.item()]
+    #print('action', agent.next_action)
 
     return
 
@@ -108,7 +109,7 @@ def reward_update(agent):
     reward = torch.tensor([reward_gained], device=agent.device, dtype=torch.float)
     
     agent.reward_received.append(reward)
-
+    #print('reward', reward)
     return
     
 
@@ -204,34 +205,54 @@ def create_map(agent):
     explosions = game_state['explosions']
     coins = game_state['coins']
     
-    #place agent and other events in one array
-    arena[pos[0],pos[1]] = 2
-    #add explosions
-    arena = arena + 9*explosions
 
-    #add bombs
-    for i in range(len(bombs)):
-        arena[bombs[i][0],bombs[i][1]] = 14 - bombs[i][2]
-        #make sure we know if we sit on a bomb
-        if ((pos[0] == bombs[i][0]) and (pos[1] == bombs[i][1])):
-            arena[pos[0],pos[1]] = 10
-    
-
+    pos_np = np.zeros_like(arena)    
+    #place agent
+    pos_np[pos[0],pos[1]] = 1
+    others_np = np.zeros_like(arena)
     #add others
     for i in range(len(others)):
-        arena[others[i][0],others[i][1]] = 3
-        #add others sitting on a bomb
-        for j in range(len(bombs)):
-            if ((others[i][0] == bombs[j][0]) and (others[i][1] == bombs[j][1])):
-                arena[others[i][0],others[i][1]] = 4
-    
-    #add coins
-    for i in range(len(coins)):
-        arena[coins[i][0],coins[i][1]] = 5
+        others_np[others[i][0],others[i][1]] = 1
 
-    stateNN = np.expand_dims(arena,axis = 0)
-    assert(np.shape(stateNN) == agent.INPUT_SHAPE)
-    stateNN = np.expand_dims(stateNN,axis = 0)
+    bomb_4 = np.zeros_like(arena)
+    #add bombs
+    for i in range(len(bombs)):
+        if (bombs[i][2] == 4):
+            bomb_4[bombs[i][0],bombs[i][1]] = 1
+    bomb_3 = np.zeros_like(arena)
+    for i in range(len(bombs)):
+        if (bombs[i][2] == 3):
+            bomb_3[bombs[i][0],bombs[i][1]] = 1
+    bomb_2 = np.zeros_like(arena)
+    for i in range(len(bombs)):
+        if (bombs[i][2] == 2):
+            bomb_2[bombs[i][0],bombs[i][1]] = 1
+    bomb_1 = np.zeros_like(arena)
+    for i in range(len(bombs)):
+        if (bombs[i][2] == 1):
+            bomb_1[bombs[i][0],bombs[i][1]] = 1
+    bomb_0 = np.zeros_like(arena)
+    for i in range(len(bombs)):
+        if (bombs[i][2] == 0):
+            bomb_0[bombs[i][0],bombs[i][1]] = 1
+    #add explosions
+    explosion_2 = (explosions == 2).astype(int)
+    explosion_1 = (explosions == 1).astype(int)
+
+    #add coins
+    coins_np = np.zeros_like(arena)
+    for i in range(len(coins)):
+        coins_np[coins[i][0],coins[i][1]] = 1
+
+    #add environment
+    wall = (arena == -1).astype(int)
+    crate = (arena == 1).astype(int)
+    free = (arena == 0).astype(int)
+    
+    karte = np.stack([pos_np, others_np, bomb_4, bomb_3, bomb_2, bomb_1, bomb_0, explosion_2, explosion_1, coins_np, wall, crate, free])
+
+    assert(np.shape(karte) == agent.INPUT_SHAPE)
+    stateNN = np.expand_dims(karte,axis = 0)
     return torch.from_numpy(stateNN).float()
 
 def augment_data_transpose(state, action):
