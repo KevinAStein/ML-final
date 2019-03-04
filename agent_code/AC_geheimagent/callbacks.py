@@ -34,8 +34,8 @@ def setup(agent):
         'INTERRUPTED'    : -100,
         'INVALID_ACTION' : -200,
 
-        'BOMB_DROPPED'   :  -1,
-        'BOMB_EXPLODED'  :  10,
+        'BOMB_DROPPED'   :  -10,
+        'BOMB_EXPLODED'  :  0,
 
         'CRATE_DESTROYED':  10,
         'COIN_FOUND'     :  200,
@@ -54,11 +54,8 @@ def setup(agent):
     agent.N_actions = len(agent.actions)
 
     agent.INPUT_SHAPE = (13, 17, 17)
-    agent.BATCH_SIZE = 128
     agent.LR = 0.0001
     agent.GAMMA = 0.9
-    agent.TARGET_UPDATE = 10
-    agent.episodes = 0
     agent.model = ActorCritic(agent.INPUT_SHAPE)
     agent.optimizer = optim.Adam(agent.model.parameters(),  lr=agent.LR)
     agent.memory = ReplayMemory(10000)
@@ -114,13 +111,12 @@ def reward_update(agent):
     
 
 def end_of_episode(agent):
-    agent.episodes += 1
     reward_update(agent)
 
     final_rew = 0
     for i in range(len(agent.reward_received)):
         final_rew = agent.reward_received[i] + final_rew
-    agent.episode_durations.append(agent.game_state['step'])
+    agent.episode_durations.append(agent.game_state['step'] * 100)
     agent.episode_reward.append(final_rew)
 
 
@@ -152,7 +148,6 @@ def end_of_episode(agent):
     agent.states = []
     agent.actions_done = []
     agent.reward_received = []
-    agent.dones = []
     agent.logprobs = []
     agent.state_values = []
     return
@@ -160,6 +155,8 @@ def end_of_episode(agent):
 def calcLoss(agent):
     # calculating discounted rewards:
     rewards = []
+    policy_losses = []
+    value_losses = []
     dis_reward = 0
     for reward in agent.reward_received[::-1]:
         dis_reward = reward + agent.GAMMA * dis_reward
@@ -170,11 +167,11 @@ def calcLoss(agent):
     rewards = (rewards - rewards.mean()) / (rewards.std())
     
     loss = 0
-    for logprob, value, reward in zip(agent.logprobs, agent.state_values, agent.reward_received):
+    for logprob, value, reward in zip(agent.logprobs, agent.state_values, rewards):
         advantage = reward  - value.item()
-        action_loss = -logprob * advantage
-        value_loss = F.smooth_l1_loss(value, reward)
-        loss += (action_loss + value_loss)   
+        policy_losses.append(-logprob * advantage)
+        value_losses.append(F.smooth_l1_loss(value, torch.tensor([reward])))
+    loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
     return loss
 
 
