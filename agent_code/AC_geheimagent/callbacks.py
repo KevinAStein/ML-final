@@ -54,8 +54,8 @@ def setup(agent):
     agent.N_actions = len(agent.actions)
 
     agent.INPUT_SHAPE = (13, 17, 17)
-    agent.LR = 0.0001
-    agent.GAMMA = 0.9
+    agent.LR = 0.00001
+    agent.GAMMA = 0.8
     agent.model = ActorCritic(agent.INPUT_SHAPE)
     agent.optimizer = optim.Adam(agent.model.parameters(),  lr=agent.LR)
     agent.memory = ReplayMemory(10000)
@@ -67,6 +67,7 @@ def setup(agent):
     agent.actions_done = []
     agent.reward_received = []
     agent.reward = 0
+    agent.rev = 0
 
     try:
         agent.model.load_state_dict(torch.load('agent_code/AC_geheimagent/AC_geheimagent.pth'))
@@ -98,6 +99,9 @@ def act(agent):
     return
 
 def reward_update(agent):
+    agent.rev = agent.rev + 1
+    if agent.rev == 1:
+        return
     current_events = np.array(agent.events)
     reward_gained = 0
     for i in current_events:

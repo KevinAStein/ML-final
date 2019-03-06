@@ -8,12 +8,14 @@ class ActorCritic(nn.Module):
     def __init__(self, input_shape):
         super(ActorCritic, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(13, 8, 3, 1), # Das kann jetzt halt alles mögliche sein. Sind hier mal 2 Convolutional Layer.
+            nn.Conv2d(13, 64, 3, 1), # Das kann jetzt halt alles mögliche sein. Sind hier mal 2 Convolutional Layer.
                                    # Die Parameter sind: in_channels, out_channels, kernel_size, stride
                                    # Da dein Input das Spielfeld ist, ist in_channels=1, für rgb images zb in_channels=3.
                                    # Siehe https://pytorch.org/docs/stable/nn.html
             nn.ReLU(),
-            nn.Conv2d(8, 32, 3, 1),
+            nn.Conv2d(64, 128, 3, 1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, 3, 1),
             nn.ReLU(),
         )
 
