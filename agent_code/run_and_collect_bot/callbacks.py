@@ -72,7 +72,7 @@ def setup(agent):
     agent.rev = 0
 
     try:
-        agent.model.load_state_dict(torch.load('agent_code/AC_geheimagent/AC_geheimagent.pth'))
+        agent.model.load_state_dict(torch.load('agent_code/run_and_collect_bot/run_and_collect_bot.pth'))
         agent.model.eval()
         print('model loaded')
     except FileNotFoundError:
@@ -80,7 +80,7 @@ def setup(agent):
 
     agent.steps_done = 0
     plt.ion()
-    print('AC geheimagent setup done')
+    print('run_and_collect_bot setup done')
     return
 
 def act(agent):
@@ -131,7 +131,7 @@ def end_of_episode(agent):
     plt.clf()
     durations_t = torch.tensor(agent.episode_durations, dtype=torch.float)
     reward_t = torch.tensor(agent.episode_reward, dtype=torch.float)
-    plt.title('AC Agent')
+    plt.title('run_and_collect_bot')
     plt.xlabel('Episode')
     plt.ylabel('Duration')
     plt.plot(durations_t.numpy())
@@ -150,7 +150,7 @@ def end_of_episode(agent):
     loss.backward()
     agent.optimizer.step() 
 
-    torch.save(agent.model.state_dict(), 'agent_code/AC_geheimagent/AC_geheimagent.pth') 
+    torch.save(agent.model.state_dict(), 'agent_code/run_and_collect_bot/run_and_collect_bot.pth') 
     print('model saved')
     agent.states = []
     agent.actions_done = []
