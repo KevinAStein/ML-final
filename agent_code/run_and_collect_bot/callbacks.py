@@ -30,11 +30,11 @@ def setup(agent):
         'MOVED_RIGHT'    :  -1,
         'MOVED_UP'       :  -1, 
         'MOVED_DOWN'     :  -1,
-        'WAITED'         :  -10,
+        'WAITED'         :  -1,
         'INTERRUPTED'    : -10,
         'INVALID_ACTION' : -20,
 
-        'BOMB_DROPPED'   :  10,
+        'BOMB_DROPPED'   :  1,
         'BOMB_EXPLODED'  :  0,
 
         'CRATE_DESTROYED':  100,
